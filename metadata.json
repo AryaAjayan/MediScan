@@ -1,0 +1,6 @@
+{
+  "name": "MediScan - Chest X-Ray Classification & Grad-CAM System",
+  "description": "An interactive deep learning workbench modeling a fine-tuned ResNet-50 Chest X-Ray classification system (Pneumonia vs. Normal). Features real-time image preprocessing simulation, dynamic Grad-CAM activation mapping overlays, and a hosted FastAPI Docker endpoint simulation with interactive Swagger playground.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
