@@ -48,6 +48,29 @@ export const PreprocessPanel: React.FC<PreprocessPanelProps> = ({ config, onChan
           Fine-tuned ResNet-50 models require specific resizing, standardizations, and augmentation steps to improve generalization and counter sparse medical datasets.
         </p>
 
+        {/* Augmentation Presets */}
+        <div className="mb-5 bg-slate-950 p-2.5 rounded-xl border border-slate-850">
+          <span className="text-[10px] font-mono text-slate-500 block uppercase tracking-wider mb-2">
+            AUGMENTATION PROFILE PRESETS
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Standard', config: { rotation: 0, horizontalFlip: false, brightness: 1.0, contrast: 1.0, resize: 224, normMean: [0.485, 0.456, 0.406], normStd: [0.229, 0.224, 0.225], gaussianNoise: 0.0 } },
+              { label: 'Diagnostic', config: { rotation: 5, horizontalFlip: false, brightness: 1.15, contrast: 1.35, resize: 224, normMean: [0.485, 0.456, 0.406], normStd: [0.229, 0.224, 0.225], gaussianNoise: 0.05 } },
+              { label: 'Scanner Noise', config: { rotation: -10, horizontalFlip: true, brightness: 0.85, contrast: 0.9, resize: 128, normMean: [0.485, 0.456, 0.406], normStd: [0.229, 0.224, 0.225], gaussianNoise: 0.3 } },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => onChange(preset.config as any)}
+                className="py-1 px-1.5 bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-[10px] font-mono rounded-lg transition-all text-slate-350 hover:text-white cursor-pointer text-center"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* 1. Resizing & Interpolation Target */}
         <div className="mb-5">
           <label className="text-xs font-mono text-slate-300 flex justify-between items-center mb-2">
