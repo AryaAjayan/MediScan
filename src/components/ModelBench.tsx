@@ -37,6 +37,7 @@ export const ModelBench: React.FC<ModelBenchProps> = ({
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [metricTab, setMetricTab] = useState<'roc' | 'loss' | 'matrix'>('roc');
+  const [showGlossary, setShowGlossary] = useState(false);
 
   const handleDownloadReport = () => {
     if (!inferenceResult) return;
@@ -403,6 +404,33 @@ MediScan Interactive Medical AI Explainer.
                 <div>Active FC Channels: <span className="text-indigo-400">2048 to 2</span></div>
                 <div>Avg CrossEntropy Loss: <span className="text-slate-200">0.142</span></div>
               </div>
+            </div>
+
+            {/* Clinical Glossary Explainer */}
+            <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-850 mt-3">
+              <button
+                onClick={() => setShowGlossary(!showGlossary)}
+                className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-wider cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                {showGlossary ? 'Hide Clinical Glossary' : 'Show Clinical Glossary'}
+              </button>
+              {showGlossary && (
+                <div className="mt-2 text-[10.5px] text-slate-500 space-y-1.5 border-t border-slate-900 pt-2 leading-relaxed">
+                  <div>
+                    <strong className="text-slate-400 font-mono">Consolidation:</strong> Alveoli spaces filled with fluid/pus instead of air (appears dense white).
+                  </div>
+                  <div>
+                    <strong className="text-slate-400 font-mono">Infiltrates:</strong> Ill-defined patchy opacities showing cellular substance/fluid accumulation.
+                  </div>
+                  <div>
+                    <strong className="text-slate-400 font-mono">Pleural Effusion:</strong> Excess fluid build-up in the pleural cavity surrounding the lungs.
+                  </div>
+                  <div>
+                    <strong className="text-slate-400 font-mono">Air Bronchograms:</strong> Dark air-filled bronchi outlines visible against dense consolidated lung fields.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
