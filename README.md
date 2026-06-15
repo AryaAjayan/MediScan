@@ -83,6 +83,7 @@ Users can tune parameters in real-time to visualize how preprocessing affects th
 ### 2. Explainable AI (Grad-CAM)
 The model explains its classification decisions using Gradient-weighted Class Activation Mapping:
 * Renders a 7x7 spatial heatmap representing regions of high neural attention.
+* Supports multiple colormap visualization indices: Jet (Spectral), Viridis (Contrast), Inferno (Thermal), Hot (Ironbow), and Magma (Sunset).
 * Allows adjusting the overlay blending opacity.
 * Identifies which specific anatomical structures (e.g., lower lobes, perihilar networks) guided the classification decision.
 
