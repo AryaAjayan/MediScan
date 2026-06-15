@@ -353,7 +353,17 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
               {/* Endpoint interactive payload summary */}
               <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono px-1">
                 <span>Payload: multipart/form-data (Key: "file")</span>
-                <span>Active Input: {selectedSampleName || 'Default'}</span>
+                <div className="flex items-center gap-2">
+                  <span>Active Input: {selectedSampleName || 'Default'}</span>
+                  {inferenceResult && (
+                    <button
+                      onClick={() => copyToClipboard(swaggerResponse, 'json')}
+                      className="text-cyan-500 hover:text-cyan-400 font-semibold cursor-pointer flex items-center gap-0.5"
+                    >
+                      • {copiedKey === 'json' ? 'Copied JSON' : 'Copy JSON'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Code JSON Response Block */}
