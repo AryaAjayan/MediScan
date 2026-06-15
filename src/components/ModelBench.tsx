@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SampleXray, InferenceResult, PreprocessingConfig } from '../types';
 import { SAMPLE_XRAYS } from '../data/samples';
-import { Upload, HelpCircle, Activity, Sparkles, AlertCircle, TrendingUp, CheckCircle, BarChart2 } from 'lucide-react';
+import { Upload, HelpCircle, Activity, Sparkles, AlertCircle, TrendingUp, CheckCircle, BarChart2, Download } from 'lucide-react';
 
 interface ModelBenchProps {
   onRunInference: (
@@ -37,6 +37,54 @@ export const ModelBench: React.FC<ModelBenchProps> = ({
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [metricTab, setMetricTab] = useState<'roc' | 'loss' | 'matrix'>('roc');
+
+  const handleDownloadReport = () => {
+    if (!inferenceResult) return;
+    const timestamp = new Date().toISOString();
+    const reportText = `==================================================
+MEDISCAN DIAGNOSTIC REPORT
+Generated: \${timestamp}
+Ref ID: \${inferenceResult.id}
+==================================================
+
+[1] CLINICAL CASE SUMMARY
+--------------------------------------------------
+Patient ID: \${selectedXray.metadata.id}
+Age/Gender: \${selectedXray.metadata.age} y/o, \${selectedXray.metadata.gender}
+Clinical Findings: \${selectedXray.clinicalFindings}
+
+[2] CNN CLASSIFICATION OUTCOME
+--------------------------------------------------
+Determination: \${inferenceResult.type.toUpperCase()}
+Confidence Score: \${inferenceResult.probability.toFixed(1)}%
+Normal/Healthy Probability: \${inferenceResult.normalProb.toFixed(1)}%
+Pneumonia/Pathological Probability: \${inferenceResult.pneumoniaProb.toFixed(1)}%
+Model Backbone: \${inferenceResult.resnetFeatures.backbone}
+Inference Latency: \${inferenceResult.latencyMs}ms
+
+[3] SPECIFIC PATHOLOGICAL ATTRIBUTES
+--------------------------------------------------
+Consolidation Index: \${inferenceResult.clinicalAttributes.consolidation.toFixed(1)}%
+Patchy Infiltrates Score: \${inferenceResult.clinicalAttributes.infiltrates.toFixed(1)}%
+Pleural Effusion Risk: \${inferenceResult.clinicalAttributes.pleuralEffusion.toFixed(1)}%
+Air Bronchograms Signal: \${inferenceResult.clinicalAttributes.airBronchograms ? 'PRESENT' : 'NOT DETECTED'}
+
+[4] GRAD-CAM EXPLAINABILITY ATTRIBUTION
+--------------------------------------------------
+\${inferenceResult.explainability}
+
+--------------------------------------------------
+MediScan Interactive Medical AI Explainer.
+==================================================`;
+
+    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mediscan_report_\${selectedXray.metadata.id}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Handle image upload conversions to base64
   const handleImageFile = (file: File) => {
@@ -378,13 +426,22 @@ export const ModelBench: React.FC<ModelBenchProps> = ({
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-800">
-              <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1.5">
-                FASTAPI HOST CONNECTOR URL
-              </span>
-              <code className="text-[10px] font-mono block bg-slate-950 py-1.5 px-3 rounded-lg border border-slate-850 truncate text-slate-400">
-                {inferenceResult.dockerEndpointUsed}
-              </code>
+            <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">
+                  FASTAPI HOST CONNECTOR URL
+                </span>
+                <code className="text-[10px] font-mono block bg-slate-950 py-1.5 px-3 rounded-lg border border-slate-850 max-w-[220px] sm:max-w-[280px] truncate text-slate-400">
+                  {inferenceResult.dockerEndpointUsed}
+                </code>
+              </div>
+              <button
+                onClick={handleDownloadReport}
+                className="w-full sm:w-auto py-2 px-4 bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-slate-200"
+              >
+                <Download className="w-3.5 h-3.5 text-cyan-400" />
+                Export Report
+              </button>
             </div>
           </div>
         </div>
