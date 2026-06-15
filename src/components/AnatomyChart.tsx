@@ -14,7 +14,7 @@ interface AnatomyChartProps {
 }
 
 // Colormap lookup functions
-function getColormapColor(value: number, colormap: 'jet' | 'viridis' | 'inferno' | 'hot'): { r: number, g: number, b: number } {
+function getColormapColor(value: number, colormap: 'jet' | 'viridis' | 'inferno' | 'hot' | 'magma'): { r: number, g: number, b: number } {
   const v = Math.max(0, Math.min(1, value));
   
   if (colormap === 'jet') {
@@ -35,6 +35,12 @@ function getColormapColor(value: number, colormap: 'jet' | 'viridis' | 'inferno'
     const r = Math.round(Math.max(0, Math.min(255, 255 * (v < 0.4 ? v * 2 : 1))));
     const g = Math.round(Math.max(0, Math.min(255, 255 * (v < 0.4 ? v * 0.5 : v < 0.8 ? (v - 0.4) / 0.4 * 0.8 + 0.2 : 1))));
     const b = Math.round(Math.max(0, Math.min(255, 255 * (v < 0.2 ? v * 3 : v < 0.6 ? 0.6 - (v - 0.2) : v / 2 + 0.5))));
+    return { r, g, b };
+  } else if (colormap === 'magma') {
+    // Black -> Purple -> Orange-red -> Yellow
+    const r = Math.round(Math.max(0, Math.min(255, 255 * (v < 0.35 ? v * 1.5 : v < 0.7 ? 0.525 + (v - 0.35) * 1.35 : 1))));
+    const g = Math.round(Math.max(0, Math.min(255, 255 * (v < 0.3 ? v * 0.3 : v < 0.6 ? 0.09 + (v - 0.3) * 1.7 : 0.6 + (v - 0.6) * 1.0))));
+    const b = Math.round(Math.max(0, Math.min(255, 255 * (v < 0.2 ? v * 3.5 : v < 0.55 ? 0.7 - (v - 0.2) * 1.1 : 0.315 + (v - 0.55) * 1.955))));
     return { r, g, b };
   } else {
     // Viridis

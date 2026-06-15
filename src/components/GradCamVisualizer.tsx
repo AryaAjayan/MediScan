@@ -92,6 +92,7 @@ export const GradCamVisualizer: React.FC<GradCamVisualizerProps> = ({
               { id: 'viridis', label: 'Viridis (Contrast)', gradient: 'from-indigo-950 via-teal-600 to-yellow-400' },
               { id: 'inferno', label: 'Inferno (Thermal)', gradient: 'from-black via-fuchsia-700 to-yellow-300' },
               { id: 'hot', label: 'Hot (Ironbow)', gradient: 'from-black via-red-650 to-white' },
+              { id: 'magma', label: 'Magma (Sunset)', gradient: 'from-black via-pink-700 to-yellow-300' },
             ].map((mapItem) => (
               <button
                 key={mapItem.id}

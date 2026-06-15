@@ -41,7 +41,7 @@ export interface PreprocessingConfig {
 export interface GradCamConfig {
   opacity: number; // 0 to 1
   layer: 'layer1.2.conv3' | 'layer2.3.conv3' | 'layer3.5.conv3' | 'layer4.2.conv3'; // Layer depth selection
-  colormap: 'jet' | 'viridis' | 'inferno' | 'hot';
+  colormap: 'jet' | 'viridis' | 'inferno' | 'hot' | 'magma';
 }
 
 export interface InferenceResult {
