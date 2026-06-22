@@ -20,6 +20,7 @@ interface ModelBenchProps {
   loading: boolean;
   selectedAreaIndex: number | null;
   setSelectedAreaIndex: (idx: number | null) => void;
+  prepConfig: PreprocessingConfig;
 }
 
 export const ModelBench: React.FC<ModelBenchProps> = ({
@@ -34,6 +35,7 @@ export const ModelBench: React.FC<ModelBenchProps> = ({
   loading,
   selectedAreaIndex,
   setSelectedAreaIndex,
+  prepConfig,
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [metricTab, setMetricTab] = useState<'roc' | 'loss' | 'matrix'>('roc');
@@ -403,6 +405,19 @@ MediScan Interactive Medical AI Explainer.
                 <div>Device Target: <span className="text-cyan-400">cuda:0 GeForce</span></div>
                 <div>Active FC Channels: <span className="text-indigo-400">2048 to 2</span></div>
                 <div>Avg CrossEntropy Loss: <span className="text-slate-200">0.142</span></div>
+              </div>
+            </div>
+
+            {/* Active Preprocessing Augmentations */}
+            <div className="bg-slate-950 rounded-xl p-3 border border-slate-850 mt-3">
+              <span className="text-[9px] font-mono text-slate-500 block uppercase tracking-wider mb-1.5">
+                ACTIVE INPUT PREPROCESSING TRANSFORM SPECIFICATIONS
+              </span>
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono leading-relaxed text-slate-400">
+                <div>Resize Dim: <span className="text-slate-200">{prepConfig.resize}px</span></div>
+                <div>Random Rotation: <span className="text-slate-200">{prepConfig.rotation}°</span></div>
+                <div>Horizontal Flip: <span className="text-slate-200">{prepConfig.horizontalFlip ? 'Yes' : 'No'}</span></div>
+                <div>Gaussian Noise: <span className="text-slate-200">{(prepConfig.gaussianNoise * 100).toFixed(0)}%</span></div>
               </div>
             </div>
 
