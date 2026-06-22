@@ -109,6 +109,13 @@ app.post("/api/docker-control", (req, res) => {
   res.json({ success: true, state: dockerState });
 });
 
+// 2.5 Clear Docker Logs
+app.post("/api/docker-logs/clear", (req, res) => {
+  logs = [];
+  addLog('info', 'docker', 'System logs cleared by user.');
+  res.json({ success: true });
+});
+
 // 3. Inference System simulation (using optional Gemini AI or robust local rule parameters)
 app.post("/api/classify", async (req, res) => {
   const { id, name, isCustom, base64ImageData, prepConfig } = req.body;
