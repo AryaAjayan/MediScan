@@ -87,6 +87,17 @@ export default function App() {
     }
   };
 
+  const handleClearLogs = async () => {
+    try {
+      const res = await fetch('/api/docker-logs/clear', { method: 'POST' });
+      if (res.ok) {
+        await fetchDockerStatus();
+      }
+    } catch (err) {
+      console.error('Failed to clear logs:', err);
+    }
+  };
+
   // Run server inference pipeline
   const handleRunInference = async (
     xray: SampleXray,
@@ -305,6 +316,7 @@ export default function App() {
                   loading={loading}
                   selectedAreaIndex={selectedAreaIndex}
                   setSelectedAreaIndex={setSelectedAreaIndex}
+                  prepConfig={prepConfig}
                 />
               </section>
             </motion.div>
@@ -374,6 +386,7 @@ export default function App() {
               <FastApiSandbox
                 dockerStatus={dockerStatus}
                 onControlContainer={handleControlContainer}
+                onClearLogs={handleClearLogs}
                 inferenceResult={inferenceResult}
                 prepConfig={prepConfig}
                 selectedSampleName={isCustom ? 'Uploaded_Diagnosis_File.png' : selectedXray.name}
