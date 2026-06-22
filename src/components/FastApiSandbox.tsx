@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { DockerStatus, InferenceResult, PreprocessingConfig } from '../types';
-import { Terminal, Shield, Play, Square, RotateCw, CheckCircle2, Copy, FileCode, Server } from 'lucide-react';
+import { Terminal, Shield, Play, Square, RotateCw, CheckCircle2, Copy, FileCode, Server, Trash2, Download } from 'lucide-react';
 
 interface FastApiSandboxProps {
   dockerStatus: DockerStatus;
   onControlContainer: (action: 'start' | 'stop' | 'restart') => void;
+  onClearLogs: () => void;
   inferenceResult: InferenceResult | null;
   prepConfig: PreprocessingConfig;
   selectedSampleName: string;
@@ -13,6 +14,7 @@ interface FastApiSandboxProps {
 export const FastApiSandbox: React.FC<FastApiSandboxProps> = ({
   dockerStatus,
   onControlContainer,
+  onClearLogs,
   inferenceResult,
   prepConfig,
   selectedSampleName,
@@ -34,6 +36,17 @@ export const FastApiSandbox: React.FC<FastApiSandboxProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedKey(label);
     setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const downloadLogs = () => {
+    const logText = dockerStatus.logs.map(l => `[${l.timestamp.split('T')[1].substring(0, 8)}] [${l.component}] [${l.level.toUpperCase()}] ${l.message}`).join('\n');
+    const blob = new Blob([logText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `medscan-server-logs-${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // High quality PyTorch Code Snippet
@@ -407,9 +420,19 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
             <Terminal className="text-cyan-400 w-3.5 h-3.5" />
             FastAPI Ingress Console Output
           </span>
-          <span className="text-[10px] text-slate-500 font-mono">
-            {dockerStatus.logs.length} operations logged
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-slate-500 font-mono">
+              {dockerStatus.logs.length} operations logged
+            </span>
+            <div className="flex items-center gap-1.5 border border-slate-800 rounded bg-slate-900/50 p-0.5">
+              <button onClick={downloadLogs} className="p-1 text-slate-500 hover:text-cyan-400 hover:bg-slate-800 rounded transition-colors" title="Download Logs">
+                <Download className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={onClearLogs} className="p-1 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors" title="Clear Logs">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
         <div className="h-[140px] overflow-y-auto rounded-xl bg-slate-950 border border-slate-800/80 p-3.5 font-mono text-[11px] leading-relaxed select-text flex flex-col gap-1.5 scrollbar-thin">
           {dockerStatus.logs.slice().reverse().map((log, idx) => {
