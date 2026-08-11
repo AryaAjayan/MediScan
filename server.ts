@@ -1,8 +1,8 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { spawn } from "child_process";
 
 dotenv.config();
 
@@ -11,8 +11,8 @@ const app = express();
 const PORT = 3000;
 
 // Body Parsers
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ limit: '20mb', extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Simulate Docker status
 let dockerState: 'stopped' | 'running' | 'restarting' = 'running';
@@ -45,26 +45,6 @@ function addLog(level: 'info' | 'warn' | 'error' | 'success', component: 'uvicor
   }
 }
 
-// Lazy-loaded Gemini AI client helper
-let aiClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-  if (!aiClient) {
-    aiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
-  return aiClient;
-}
-
 // Server API Routes
 
 // 1. Docker Status
@@ -80,7 +60,7 @@ app.get("/api/docker-status", (req, res) => {
 
 // 2. Control Docker Container
 app.post("/api/docker-control", (req, res) => {
-  const { action } = req.body; // 'stop' | 'start' | 'restart'
+  const { action } = req.body; 
   
   if (action === 'stop') {
     dockerState = 'stopped';
@@ -116,6 +96,44 @@ app.post("/api/docker-logs/clear", (req, res) => {
   res.json({ success: true });
 });
 
+// Helper function to run PyTorch inference via Python
+function runPyTorchInference(base64Image: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    // Spawn python process
+    const pythonProcess = spawn('python', ['inference.py']);
+    let outputData = '';
+    let errorData = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      outputData += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      errorData += data.toString();
+    });
+
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(errorData || 'Python process failed without stderr'));
+      }
+      try {
+        const result = JSON.parse(outputData);
+        if (result.error) {
+          reject(new Error(result.error));
+        } else {
+          resolve(result);
+        }
+      } catch (e) {
+        reject(new Error("Failed to parse Python output as JSON: " + outputData));
+      }
+    });
+
+    // Write base64 image data to stdin and close it
+    pythonProcess.stdin.write(base64Image.split(',')[1] || base64Image);
+    pythonProcess.stdin.end();
+  });
+}
+
 // 3. Inference System simulation (using optional Gemini AI or robust local rule parameters)
 app.post("/api/classify", async (req, res) => {
   const { id, name, isCustom, base64ImageData, prepConfig } = req.body;
@@ -127,7 +145,6 @@ app.post("/api/classify", async (req, res) => {
     });
   }
 
-  // Preprocessing logs
   addLog('info', 'fastapi', `POST /api/v1/inference - Request received for image [${isCustom ? 'Uploaded_Xray' : id}]`);
   
   if (prepConfig) {
@@ -160,7 +177,7 @@ app.post("/api/classify", async (req, res) => {
         latencyMs: 38 + Math.round(Math.random() * 25),
         imageDimensions: { w: 224, h: 224 },
         resnetFeatures: {
-          backbone: "ResNet-50 (Fine-Tuned on CheXpert & ChestX-ray8)",
+          backbone: "ResNet-50",
           fineTunedEpochs: 25,
           activeChannels: 2048,
           lossAttribution: 0.124
@@ -172,7 +189,7 @@ app.post("/api/classify", async (req, res) => {
           airBronchograms: false
         },
         gradCamGrid: grid,
-        explainability: "The model focused key visual attention on the costophrenic angles and the heart borders to guarantee absence of pathological infiltrates. High visual attribution was centered on anatomical features associated with typical clear ventilated thorax expansions. Zero indices of patchy opacity or consolidation were detected in either hemithorax.",
+        explainability: "The model focused key visual attention on the costophrenic angles and the heart borders to guarantee absence of pathological infiltrates. High visual attribution was centered on anatomical features associated with typical clear ventilated thorax expansions.",
         dockerEndpointUsed: "http://localhost:8000/api/v1/inference"
       };
     } else {
@@ -181,31 +198,15 @@ app.post("/api/classify", async (req, res) => {
       const pPneumonia = isViral ? (89.5 + Math.random() * 5) : (96.4 + Math.random() * 3);
       const pNormal = 100 - pPneumonia;
       
-      // Let's model different paths of activation
-      let grid: number[][];
-      if (isViral) {
-        // Viral multifocal - activates both left & right lower areas
-        grid = [
-          [0.10, 0.12, 0.11, 0.08, 0.11, 0.13, 0.11],
-          [0.15, 0.22, 0.18, 0.10, 0.18, 0.24, 0.16],
-          [0.25, 0.52, 0.35, 0.15, 0.34, 0.48, 0.28],
-          [0.40, 0.78, 0.50, 0.20, 0.48, 0.72, 0.42],
-          [0.45, 0.85, 0.55, 0.22, 0.52, 0.82, 0.48],
-          [0.30, 0.65, 0.40, 0.18, 0.38, 0.60, 0.32],
-          [0.15, 0.25, 0.20, 0.10, 0.18, 0.22, 0.15]
-        ];
-      } else {
-        // Bacterial Lobar on bottomright (which represents visual bottom-left coordinates)
-        grid = [
-          [0.08, 0.08, 0.06, 0.05, 0.05, 0.06, 0.07],
-          [0.12, 0.14, 0.08, 0.06, 0.06, 0.08, 0.09],
-          [0.22, 0.34, 0.15, 0.08, 0.07, 0.10, 0.12],
-          [0.48, 0.74, 0.28, 0.10, 0.08, 0.12, 0.14],
-          [0.62, 0.92, 0.45, 0.12, 0.10, 0.14, 0.16],
-          [0.44, 0.78, 0.32, 0.10, 0.08, 0.11, 0.12],
-          [0.18, 0.32, 0.15, 0.06, 0.05, 0.07, 0.08]
-        ];
-      }
+      let grid: number[][] = [
+        [0.10, 0.12, 0.11, 0.08, 0.11, 0.13, 0.11],
+        [0.15, 0.22, 0.18, 0.10, 0.18, 0.24, 0.16],
+        [0.25, 0.52, 0.35, 0.15, 0.34, 0.48, 0.28],
+        [0.40, 0.78, 0.50, 0.20, 0.48, 0.72, 0.42],
+        [0.45, 0.85, 0.55, 0.22, 0.52, 0.82, 0.48],
+        [0.30, 0.65, 0.40, 0.18, 0.38, 0.60, 0.32],
+        [0.15, 0.25, 0.20, 0.10, 0.18, 0.22, 0.15]
+      ];
 
       return {
         type: 'pneumonia',
@@ -215,160 +216,112 @@ app.post("/api/classify", async (req, res) => {
         latencyMs: 45 + Math.round(Math.random() * 30),
         imageDimensions: { w: 224, h: 224 },
         resnetFeatures: {
-          backbone: "ResNet-50 (Fine-Tuned on CheXpert & ChestX-ray8)",
+          backbone: "ResNet-50",
           fineTunedEpochs: 25,
           activeChannels: 2048,
           lossAttribution: 0.854
         },
         clinicalAttributes: {
-          consolidation: isViral ? 52.4 : 91.8,
-          infiltrates: isViral ? 88.5 : 94.2,
-          pleuralEffusion: isViral ? 34.0 : 12.5,
-          airBronchograms: !isViral
+          consolidation: 88.5,
+          infiltrates: 94.2,
+          pleuralEffusion: 34.0,
+          airBronchograms: true
         },
         gradCamGrid: grid,
-        explainability: isViral 
-          ? "Unsupervised Grad-CAM visualizes intense spatial gradient attributions scattered symmetrically across BOTH lower lung hemispheres. The focus correlates securely with diffuse, bilateral ground-glass densities characteristic of viral consolidation triggers. Peak intensity is anchored coordinates surrounding perihilar networks."
-          : "The CNN final convolution layers (target layer: layer4.2.conv3) generated extreme diagnostic activations tightly localized mapping the posterior segments of the anatomical Right Lower Lobe. The model heavily weighted the visible silhouetting of the Right Diaphragm margin as a key differentiator. The focal dense consolidation and air bronchograms serve as prominent high-activation classifiers.",
+        explainability: "Unsupervised Grad-CAM visualizes intense spatial gradient attributions scattered across the lower lung hemispheres correlating with consolidation.",
         dockerEndpointUsed: "http://localhost:8000/api/v1/inference"
       };
     }
   };
 
-  // Check if we can use Gemini to analyze custom uploads or dynamically upgrade Preset interpretations!
-  const gemini = getGeminiClient();
-  
-  if (gemini && base64ImageData) {
+  // 4. TRUE PYTORCH INFERENCE!
+  if (base64ImageData) {
     try {
-      addLog('info', 'fastapi', 'Invoking backend Vision Transformer + ResNet reasoning path via Gemini API to extract high-accuracy diagnostic features.');
+      addLog('info', 'pytorch', 'Invoking ResNet-50 inference via Python bridge on uploaded image...');
       
-      const imagePart = {
-        inlineData: {
-          mimeType: "image/png",
-          data: base64ImageData.split(',')[1] || base64ImageData
-        }
-      };
-
-      const prompt = `You are a simulated fine-tuned ResNet-50 chest X-ray deep learning classification model (Pneumonia vs Normal).
-Evaluate the provided chest X-ray image. Provide the output in JSON format exactly representing what a computer vision CNN would output with Grad-CAM visualization.
-Analyze carefully if there is visible pneumonia (accumulation of fluid/consolidation/opacity in left or right lungs) or if it is normal.
-
-You MUST respond with a JSON object following this schema. Do not output markdown besides JSON.
-{
-  "prediction": "normal" | "pneumonia",
-  "pneumoniaConfidence": number (value between 0.0 and 100.0),
-  "normalConfidence": number (value between 0.0 and 100.0),
-  "consolidationConfidence": number (percentage 0 to 100),
-  "infiltratesConfidence": number (percentage 0 to 100),
-  "pleuralEffusionConfidence": number (percentage 0 to 100),
-  "airBronchograms": boolean,
-  "findingsText": "Short clinical sentence summarizing the visual findings",
-  "explainabilityText": "Write a highly detailed explanation mapping Grad-CAM visual attention. E.g. where the model localized, what convolutional features were weighted, and clinical relevance.",
-  "heatmapActivations": [7 arrays of 7 numbers, where each number is between 0.0 and 1.0. This models a 7x7 spatial activation grid from the last layer. High values (0.7-1.0) should perfectly coincide with areas of dense consolidation (either left lung mid/lower region, right lung, or clear for normal).]
-}`;
-
-      const response = await gemini.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: [imagePart, { text: prompt }],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              prediction: { type: Type.STRING, description: "Must be 'normal' or 'pneumonia'" },
-              pneumoniaConfidence: { type: Type.NUMBER },
-              normalConfidence: { type: Type.NUMBER },
-              consolidationConfidence: { type: Type.NUMBER },
-              infiltratesConfidence: { type: Type.NUMBER },
-              pleuralEffusionConfidence: { type: Type.NUMBER },
-              airBronchograms: { type: Type.BOOLEAN },
-              findingsText: { type: Type.STRING },
-              explainabilityText: { type: Type.STRING },
-              heatmapActivations: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.ARRAY,
-                  items: { type: Type.NUMBER },
-                  description: "7 elements in the row"
-                },
-                description: "Array of 7 rows"
-              }
-            },
-            required: [
-              "prediction", "pneumoniaConfidence", "normalConfidence",
-              "consolidationConfidence", "infiltratesConfidence",
-              "pleuralEffusionConfidence", "airBronchograms",
-              "findingsText", "explainabilityText", "heatmapActivations"
-            ]
-          }
-        }
-      });
-
-      const text = response.text || "{}";
-      const resultObj = JSON.parse(text);
-
-      const latency = Date.now() - startTimer;
-      addLog('success', 'fastapi', `Inference successful! Time=${latency}ms, Class=[${resultObj.prediction.toUpperCase()}], Score=${resultObj.prediction === 'pneumonia' ? resultObj.pneumoniaConfidence : resultObj.normalConfidence}%`);
+      const pyResult = await runPyTorchInference(base64ImageData);
+      
+      const pNormal = pyResult.normalConfidence;
+      const pPneumonia = pyResult.pneumoniaConfidence;
+      const type = pyResult.prediction; // 'normal' | 'pneumonia'
+      
+      addLog('success', 'pytorch', `Inference successful: ${type.toUpperCase()} [N=${pNormal.toFixed(1)}%, P=${pPneumonia.toFixed(1)}%]`);
 
       return res.json({
-        type: resultObj.prediction,
-        probability: resultObj.prediction === 'pneumonia' ? resultObj.pneumoniaConfidence : resultObj.normalConfidence,
-        normalProb: resultObj.normalConfidence,
-        pneumoniaProb: resultObj.pneumoniaConfidence,
-        latencyMs: latency,
+        type: type,
+        probability: type === 'pneumonia' ? pPneumonia : pNormal,
+        normalProb: pNormal,
+        pneumoniaProb: pPneumonia,
+        latencyMs: Date.now() - startTimer,
         imageDimensions: { w: 224, h: 224 },
         resnetFeatures: {
-          backbone: "ResNet-50 (Fine-Tuned on CheXpert & ChestX-ray8)",
+          backbone: "ResNet-50",
           fineTunedEpochs: 25,
           activeChannels: 2048,
-          lossAttribution: resultObj.prediction === 'pneumonia' ? 0.89 : 0.11
+          lossAttribution: 0.183
         },
         clinicalAttributes: {
-          consolidation: resultObj.consolidationConfidence,
-          infiltrates: resultObj.infiltratesConfidence,
-          pleuralEffusion: resultObj.pleuralEffusionConfidence,
-          airBronchograms: resultObj.airBronchograms
+          consolidation: pyResult.consolidationConfidence,
+          infiltrates: pyResult.infiltratesConfidence,
+          pleuralEffusion: pyResult.pleuralEffusionConfidence,
+          airBronchograms: pyResult.airBronchograms
         },
-        gradCamGrid: resultObj.heatmapActivations || getFallbackInference('xray-normal-01').gradCamGrid,
-        explainability: resultObj.explainabilityText || resultObj.findingsText,
-        dockerEndpointUsed: "http://localhost:8000/api/v1/inference (Analyzed via Gemini-3.5 Vision)"
+        gradCamGrid: pyResult.heatmapActivations,
+        explainability: pyResult.explainabilityText,
+        dockerEndpointUsed: "http://localhost:8000/api/v1/inference"
       });
-    } catch (err: any) {
-      addLog('error', 'fastapi', `Gemini analysis error: ${err.message || err}. Falling back to rule-based ResNet engine.`);
-      // Continue to local fallback mock
+
+    } catch (e: any) {
+      console.error(e);
+      addLog('error', 'pytorch', `Inference failed: ${e.message}. Falling back to default mock.`);
     }
   }
-
-  // Local fallback (if Gemini not active or presets selected or failed)
-  const targetId = id || 'xray-normal-01';
-  const inference = getFallbackInference(targetId);
-  const totalDuration = Date.now() - startTimer;
-  inference.latencyMs = totalDuration;
-
+  
+  // Fallback for preset images that don't have base64 data yet
   setTimeout(() => {
-    addLog('success', 'fastapi', `Inference successful! Time=${totalDuration}ms, Class=[${inference.type.toUpperCase()}], Score=${inference.probability.toFixed(1)}%`);
-    res.json(inference);
-  }, 400); // realistic latency delay
+    res.json(getFallbackInference(id));
+  }, 1000);
 });
 
-// Configure Vite or Static server
+// Vite Integration
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: "spa",
+  });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Web application running & listening on http://localhost:${PORT}`);
+  app.use(vite.middlewares);
+
+  app.use("*", async (req, res, next) => {
+    const url = req.originalUrl;
+    try {
+      let template = await vite.transformIndexHtml(
+        url,
+        `
+        <!DOCTYPE html>
+        <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>MediScan UI</title>
+          </head>
+          <body>
+            <div id="root"></div>
+            <script type="module" src="/src/main.tsx"></script>
+          </body>
+        </html>
+        `
+      );
+      res.status(200).set({ "Content-Type": "text/html" }).end(template);
+    } catch (e: any) {
+      vite.ssrFixStacktrace(e);
+      next(e);
+    }
+  });
+
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
   });
 }
 

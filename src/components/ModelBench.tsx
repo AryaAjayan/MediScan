@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { SampleXray, InferenceResult, PreprocessingConfig } from '../types';
 import { SAMPLE_XRAYS } from '../data/samples';
-import { Upload, HelpCircle, Activity, Sparkles, AlertCircle, TrendingUp, CheckCircle, BarChart2, Download } from 'lucide-react';
+import { Upload, Activity, AlertCircle, TrendingUp, BarChart2, FileText, ChevronRight, BrainCircuit, ScanLine } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ModelBenchProps {
   onRunInference: (
@@ -18,9 +19,9 @@ interface ModelBenchProps {
   setCustomImageSrc: (src: string | null) => void;
   inferenceResult: InferenceResult | null;
   loading: boolean;
-  selectedAreaIndex: number | null;
-  setSelectedAreaIndex: (idx: number | null) => void;
-  prepConfig: PreprocessingConfig;
+  selectedAreaIndex?: number | null;
+  setSelectedAreaIndex?: (idx: number | null) => void;
+  prepConfig?: PreprocessingConfig;
 }
 
 export const ModelBench: React.FC<ModelBenchProps> = ({
@@ -33,63 +34,10 @@ export const ModelBench: React.FC<ModelBenchProps> = ({
   setCustomImageSrc,
   inferenceResult,
   loading,
-  selectedAreaIndex,
-  setSelectedAreaIndex,
-  prepConfig,
 }) => {
   const [dragActive, setDragActive] = useState(false);
-  const [metricTab, setMetricTab] = useState<'roc' | 'loss' | 'matrix'>('roc');
-  const [showGlossary, setShowGlossary] = useState(false);
+  const [resultTab, setResultTab] = useState<'overview' | 'clinical' | 'performance'>('overview');
 
-  const handleDownloadReport = () => {
-    if (!inferenceResult) return;
-    const timestamp = new Date().toISOString();
-    const reportText = `==================================================
-MEDISCAN DIAGNOSTIC REPORT
-Generated: \${timestamp}
-Ref ID: \${inferenceResult.id}
-==================================================
-
-[1] CLINICAL CASE SUMMARY
---------------------------------------------------
-Patient ID: \${selectedXray.metadata.id}
-Age/Gender: \${selectedXray.metadata.age} y/o, \${selectedXray.metadata.gender}
-Clinical Findings: \${selectedXray.clinicalFindings}
-
-[2] CNN CLASSIFICATION OUTCOME
---------------------------------------------------
-Determination: \${inferenceResult.type.toUpperCase()}
-Confidence Score: \${inferenceResult.probability.toFixed(1)}%
-Normal/Healthy Probability: \${inferenceResult.normalProb.toFixed(1)}%
-Pneumonia/Pathological Probability: \${inferenceResult.pneumoniaProb.toFixed(1)}%
-Model Backbone: \${inferenceResult.resnetFeatures.backbone}
-Inference Latency: \${inferenceResult.latencyMs}ms
-
-[3] SPECIFIC PATHOLOGICAL ATTRIBUTES
---------------------------------------------------
-Consolidation Index: \${inferenceResult.clinicalAttributes.consolidation.toFixed(1)}%
-Patchy Infiltrates Score: \${inferenceResult.clinicalAttributes.infiltrates.toFixed(1)}%
-Pleural Effusion Risk: \${inferenceResult.clinicalAttributes.pleuralEffusion.toFixed(1)}%
-Air Bronchograms Signal: \${inferenceResult.clinicalAttributes.airBronchograms ? 'PRESENT' : 'NOT DETECTED'}
-
-[4] GRAD-CAM EXPLAINABILITY ATTRIBUTION
---------------------------------------------------
-\${inferenceResult.explainability}
-
---------------------------------------------------
-MediScan Interactive Medical AI Explainer.
-==================================================`;
-
-    const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `mediscan_report_\${selectedXray.metadata.id}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Handle image upload conversions to base64
   const handleImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('Medical classification requires an image file stream (PNG/JPEG).');
@@ -99,11 +47,10 @@ MediScan Interactive Medical AI Explainer.
     reader.onload = (e) => {
       setCustomImageSrc(e.target?.result as string);
       setIsCustom(true);
-      // Construct placeholder custom SampleXray structure
       const customXray: SampleXray = {
         id: 'custom-upload',
         name: file.name,
-        type: 'normal', // initialized as normal, will be predicted by server
+        type: 'normal',
         metadata: {
           id: `USR-${Math.floor(100 + Math.random() * 899)}`,
           age: 40,
@@ -116,6 +63,9 @@ MediScan Interactive Medical AI Explainer.
         pathologicalAreas: [],
       };
       setSelectedXray(customXray);
+      
+      // Auto-trigger inference for an incredibly fluid UX
+      onRunInference(customXray, true, e.target?.result as string, () => {});
     };
     reader.readAsDataURL(file);
   };
@@ -146,534 +96,345 @@ MediScan Interactive Medical AI Explainer.
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. Interactive Diagnosis Case Library Panel */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-        <h3 className="text-sm font-semibold text-slate-250 mb-3.5 tracking-tight flex items-center gap-1.5">
-          <Activity className="w-4 h-4 text-cyan-400" />
-          Thoracic X-Ray Input Workbench
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-8">
+      {/* 1. Input Workbench - Nested Apple Style Card */}
+      <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-2xl">
+        <div className="bg-[#030712]/50 rounded-[1.25rem] p-6 lg:p-8 border border-white/[0.02]">
           
-          {/* Preset Patients List selector */}
-          <div className="space-y-2">
-            <span className="text-[11px] font-mono tracking-wider text-slate-500 uppercase block mb-1">
-              clinical case library
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-lg font-bold text-slate-100 flex items-center gap-3 tracking-tight">
+              <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                <BrainCircuit className="w-5 h-5 text-indigo-400" />
+              </div>
+              Data Ingestion Workbench
+            </h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Left: Case Library */}
+            <div className="space-y-4">
+              <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase flex items-center gap-2">
+                <FileText className="w-3 h-3" />
+                Select Patient Cohort
+              </span>
+              <div className="grid grid-cols-1 gap-3 max-h-[220px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                {SAMPLE_XRAYS.map((item) => {
+                  const isSelected = !isCustom && selectedXray.id === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedXray(item);
+                        setIsCustom(false);
+                      }}
+                      className={`p-4 rounded-2xl border text-left transition-all duration-300 flex items-center justify-between group ${
+                        isSelected
+                          ? 'border-indigo-500 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.15)]'
+                          : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/[0.1] hover:scale-[1.02]'
+                      }`}
+                    >
+                      <div className="truncate max-w-[220px]">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`w-2 h-2 rounded-full shadow-[0_0_8px_currentColor] ${item.type === 'normal' ? 'bg-emerald-400 text-emerald-400' : 'bg-rose-400 text-rose-400'}`} />
+                          <span className="text-sm font-bold text-slate-200 truncate group-hover:text-white transition-colors">{item.name}</span>
+                        </div>
+                        <span className="text-xs text-slate-500 font-mono">
+                          ID: {item.metadata.id} • {item.metadata.age}y/o
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right: Drag & Drop Dropzone */}
+            <div className="flex flex-col h-full">
+              <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-4 flex items-center gap-2">
+                <Upload className="w-3 h-3" />
+                Custom Ingestion
+              </span>
+              <div
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                className={`relative flex-grow border-2 border-dashed rounded-3xl flex flex-col items-center justify-center p-6 text-center transition-all duration-300 cursor-pointer overflow-hidden group ${
+                  dragActive 
+                    ? 'border-indigo-400 bg-indigo-500/10 scale-[1.02] shadow-[0_0_30px_rgba(99,102,241,0.2)]' 
+                    : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/20'
+                } ${isCustom ? 'border-indigo-500/50 bg-indigo-500/5' : ''}`}
+              >
+                {dragActive && (
+                  <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full animate-pulse z-0"></div>
+                )}
+                
+                <input
+                  id="file-upload-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <label htmlFor="file-upload-input" className="cursor-pointer flex flex-col items-center justify-center relative z-10 w-full h-full">
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 transition-all duration-300 ${dragActive ? 'bg-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.5)]' : 'bg-white/5 group-hover:bg-white/10 group-hover:scale-110'}`}>
+                    <Upload className={`w-6 h-6 transition-colors ${dragActive ? 'text-white' : 'text-slate-400'}`} />
+                  </div>
+                  <span className="text-base text-slate-200 font-bold mb-2 tracking-tight">
+                    {isCustom ? 'Replace Uploaded Image' : 'Drag & Drop X-Ray File'}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium max-w-[200px]">
+                    PNG, JPEG up to 10MB. Inference will run automatically.
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          {/* Action Footer */}
+          <div className="mt-8 pt-6 border-t border-white/[0.05] flex justify-between items-center">
+            <span className="text-xs text-slate-500 hidden md:block">
+              Models are loaded into system memory. Inference takes ~4s on CPU.
             </span>
-            <div className="grid grid-cols-1 gap-2 max-h-[170px] overflow-y-auto pr-1 scrollbar-thin">
-              {SAMPLE_XRAYS.map((item) => {
-                const isSelected = !isCustom && selectedXray.id === item.id;
-                return (
+            <button
+              onClick={() => onRunInference(selectedXray, isCustom, customImageSrc, () => setResultTab('overview'))}
+              disabled={loading}
+              className={`px-8 py-3.5 rounded-xl font-bold tracking-wide flex items-center gap-3 transition-all duration-300 shadow-xl ${
+                loading
+                  ? 'bg-indigo-500/50 text-white/50 cursor-not-allowed scale-95'
+                  : 'bg-indigo-500 hover:bg-indigo-400 text-white hover:scale-105 hover:shadow-[0_0_30px_rgba(99,102,241,0.4)]'
+              }`}
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  PROCESSING TENSORS...
+                </>
+              ) : (
+                <>
+                  <ScanLine className="w-5 h-5" />
+                  EXECUTE INFERENCE
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Results Dashboard */}
+      <AnimatePresence>
+        {inferenceResult && !loading && (
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-1.5 shadow-[0_15px_50px_rgba(0,0,0,0.5)] backdrop-blur-3xl relative overflow-hidden"
+          >
+            {/* Ambient result glow */}
+            <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-32 blur-[100px] pointer-events-none z-0 ${inferenceResult.type === 'normal' ? 'bg-emerald-500/20' : 'bg-rose-500/20'}`}></div>
+
+            <div className="bg-[#030712]/70 rounded-[1.25rem] p-6 lg:p-8 border border-white/[0.05] relative z-10">
+              
+              {/* Tab Navigation */}
+              <div className="flex flex-wrap gap-2 border-b border-white/[0.05] pb-6 mb-8">
+                {(['overview', 'clinical', 'performance'] as const).map((tab) => (
                   <button
-                    key={item.id}
-                    onClick={() => {
-                      setSelectedXray(item);
-                      setIsCustom(false);
-                    }}
-                    className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${
-                      isSelected
-                        ? 'border-cyan-500 bg-cyan-950/20 shadow-[inset_0_0_8px_rgba(6,182,212,0.1)]'
-                        : 'border-slate-800 bg-slate-950/40 hover:bg-slate-950'
+                    key={tab}
+                    onClick={() => setResultTab(tab)}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
+                      resultTab === tab
+                        ? 'bg-white/10 text-white shadow-inner border border-white/20'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <div className="truncate max-w-[190px]">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.type === 'normal' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                        <span className="text-xs font-semibold text-slate-200 truncate">{item.name}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        ID: {item.metadata.id} • {item.metadata.age}y/o • Gender: {item.metadata.gender}
-                      </span>
-                    </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono ${
-                      item.type === 'normal'
-                        ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-900/30'
-                        : 'bg-red-950/60 text-red-400 border border-red-900/30'
-                    }`}>
-                      {item.type}
-                    </span>
+                    {tab.replace('-', ' ')}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Drag & Drop Upload Custom X-Ray */}
-          <div className="flex flex-col justify-end">
-            <span className="text-[11px] font-mono tracking-wider text-slate-500 uppercase block mb-1">
-              evaluate custom thoracic files
-            </span>
-            <div
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              onDrop={handleDrop}
-              className={`relative border border-dashed rounded-xl h-[126px] flex flex-col items-center justify-center p-3 text-center transition-all ${
-                dragActive ? 'border-cyan-400 bg-cyan-950/10' : 'border-slate-800 bg-slate-950/30 hover:bg-slate-950/60'
-              } ${isCustom ? 'border-cyan-600 bg-cyan-950/5' : ''}`}
-            >
-              <input
-                id="file-upload-input"
-                type="file"
-                accept="image/*"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <label htmlFor="file-upload-input" className="cursor-pointer flex flex-col items-center">
-                <Upload className="w-5 h-5 text-slate-550 mb-1.5 hover:text-cyan-400 transition-colors" />
-                <span className="text-xs text-slate-300 font-medium">
-                  {isCustom ? 'Replace Uploaded File' : 'Upload External Chest X-Ray'}
-                </span>
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Drag & drop, PNG/JPG / DICOM visual format
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        {/* Selected Clinical findings block */}
-        <div className="mt-4 bg-slate-950 rounded-xl p-3.5 border border-slate-800/80">
-          <div className="flex justify-between items-center mb-1.5">
-            <span className="text-[11px] font-mono text-slate-450 uppercase tracking-widest">
-              thoracic annotations / clinical chest records
-            </span>
-            {!isCustom && selectedXray.pathologicalAreas.length > 0 && (
-              <span className="text-[9px] font-mono bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded border border-amber-900/20">
-                Lobar Consolidations Detected
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed font-sans font-medium italic">
-            "{selectedXray.clinicalFindings}"
-          </p>
-
-          {/* Interactive pathologies lists */}
-          {!isCustom && selectedXray.pathologicalAreas.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap gap-1.5 pt-2.5 border-t border-slate-900/40">
-              {selectedXray.pathologicalAreas.map((area, idx) => (
-                <button
-                  key={`tag-${idx}`}
-                  onClick={() => setSelectedAreaIndex(selectedAreaIndex === idx ? null : idx)}
-                  className={`text-[10px] px-2 py-1 rounded-md font-mono transition-all border flex items-center gap-1.5 ${
-                    selectedAreaIndex === idx
-                      ? 'bg-cyan-950 text-cyan-300 border-cyan-700 font-bold shadow-[0_0_8px_rgba(6,182,212,0.15)]'
-                      : 'bg-slate-900 text-slate-400 border-slate-820 hover:text-slate-200'
-                  }`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                  {area.description}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Diagnostic Run Button */}
-        <div className="mt-4 pt-1 flex justify-end">
-          <button
-            onClick={() => onRunInference(selectedXray, isCustom, customImageSrc, () => {})}
-            disabled={loading}
-            className={`w-full py-3 px-4 font-bold text-sm tracking-wide rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              loading
-                ? 'bg-slate-800 text-slate-500 border border-slate-700 shadow-none'
-                : 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white font-bold hover:brightness-110 active:scale-[0.98] shadow-[0_4px_20px_rgba(6,182,212,0.25)]'
-            }`}
-          >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 rounded-full border-2 border-slate-500 border-t-white animate-spin" />
-                <span>Fine-Tuned ResNet-50 running convolution layers...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 animate-bounce" />
-                <span>Run Fine-Tuned ResNet-50 Python Inference</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Deep Learning Classifier Results */}
-      {inferenceResult && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
-          {/* Classification Confidence Outcomes */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[11px] font-mono tracking-wider text-slate-500 uppercase">
-                  inference classifier predictions
-                </span>
-                <span className="text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-md">
-                  Latency: {inferenceResult.latencyMs}ms
-                </span>
+                ))}
               </div>
 
-              {/* Huge diagnosis decision title */}
-              <div className="rounded-2xl p-4 text-center border mb-5 shadow-inner bg-slate-950">
-                <span className="text-[10px] font-mono tracking-widest text-slate-500 uppercase block mb-1">
-                  CNN CLINICAL DETERMINATION
-                </span>
-                <div className={`text-2xl font-bold tracking-tight uppercase ${
-                  inferenceResult.type === 'pneumonia' ? 'text-rose-450' : 'text-emerald-455'
-                }`}>
-                  {inferenceResult.type === 'normal' ? 'Normal / Healthy Thorax' : 'Pneumonia Detected'}
-                </div>
-                <div className="text-xs text-slate-450 font-mono mt-1">
-                  Confidence Score: {inferenceResult.probability.toFixed(1)}% ({inferenceResult.resnetFeatures.backbone})
-                </div>
-              </div>
+              {/* Tab Content Areas */}
+              <div className="min-h-[300px]">
+                {resultTab === 'overview' && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center"
+                  >
+                    {/* Primary Verdict */}
+                    <div className="md:col-span-5 text-center md:text-left space-y-6">
+                      <span className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">
+                        Final Model Verdict
+                      </span>
+                      <h2 className={`text-5xl lg:text-6xl font-black tracking-tighter ${
+                        inferenceResult.type === 'normal' ? 'text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.3)]' : 'text-rose-400 drop-shadow-[0_0_20px_rgba(244,63,94,0.3)]'
+                      }`}>
+                        {inferenceResult.type === 'normal' ? 'NORMAL' : 'PNEUMONIA'}
+                      </h2>
+                      <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/[0.03] border border-white/[0.05] backdrop-blur-md">
+                        <Activity className={`w-5 h-5 ${inferenceResult.type === 'normal' ? 'text-emerald-400' : 'text-rose-400'}`} />
+                        <span className="text-xl font-mono text-white font-bold">
+                          {inferenceResult.probability.toFixed(1)}% Confidence
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-400 leading-relaxed font-medium">
+                        {inferenceResult.type === 'normal' 
+                          ? 'No significant pulmonary abnormalities detected in the provided radiography.' 
+                          : 'High confidence features indicating fluid infiltration or consolidation detected.'}
+                      </p>
+                    </div>
 
-              {/* Confidence Levels */}
-              <div className="space-y-3">
-                {/* Normally healthy probability bar */}
-                <div>
-                  <div className="flex justify-between text-xs font-mono text-slate-300 mb-1">
-                    <span>Probability: HEALTHY / NORMAL</span>
-                    <span className="font-bold text-emerald-400">{inferenceResult.normalProb.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-850">
-                    <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${inferenceResult.normalProb}%` }}
-                    />
-                  </div>
-                </div>
+                    {/* Confidence Bars */}
+                    <div className="md:col-span-7 space-y-6 bg-white/[0.02] p-6 rounded-3xl border border-white/[0.05]">
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-300">
+                          <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-rose-400"></div> Pneumonia Probability</span>
+                          <span className="font-mono text-white">{inferenceResult.pneumoniaProb.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-4 w-full bg-black/50 rounded-full overflow-hidden border border-white/5 p-0.5">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${inferenceResult.pneumoniaProb}%` }}
+                            transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
+                            className="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)]" 
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-300">
+                          <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-400"></div> Normal Probability</span>
+                          <span className="font-mono text-white">{inferenceResult.normalProb.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-4 w-full bg-black/50 rounded-full overflow-hidden border border-white/5 p-0.5">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${inferenceResult.normalProb}%` }}
+                            transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
+                            className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_10px_rgba(52,211,153,0.5)]" 
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="mt-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex gap-3">
+                        <AlertCircle className="w-5 h-5 text-indigo-400 shrink-0" />
+                        <div>
+                          <span className="text-xs font-bold text-slate-200 block mb-1 uppercase tracking-widest">Grad-CAM Explainability</span>
+                          <p className="text-sm text-slate-400 font-serif italic">
+                            "{inferenceResult.explainability}"
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
 
-                {/* Pneumonia pathology probability bar */}
-                <div>
-                  <div className="flex justify-between text-xs font-mono text-slate-300 mb-1">
-                    <span>Probability: PATHOLOGICAL PNEUMONIA</span>
-                    <span className="font-bold text-rose-400">{inferenceResult.pneumoniaProb.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-850">
-                    <div
-                      className="bg-rose-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${inferenceResult.pneumoniaProb}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
+                {resultTab === 'clinical' && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="space-y-6"
+                  >
+                    {/* Clinical Feature Grid */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-5 hover:bg-white/[0.04] transition-colors">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block mb-4">Consolidation</span>
+                        <div className="flex items-end gap-2">
+                          <span className="text-3xl font-black text-white">{inferenceResult.clinicalAttributes.consolidation.toFixed(1)}</span>
+                          <span className="text-sm text-slate-500 font-mono mb-1">%</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-5 hover:bg-white/[0.04] transition-colors">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block mb-4">Infiltrates</span>
+                        <div className="flex items-end gap-2">
+                          <span className="text-3xl font-black text-white">{inferenceResult.clinicalAttributes.infiltrates.toFixed(1)}</span>
+                          <span className="text-sm text-slate-500 font-mono mb-1">%</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-5 hover:bg-white/[0.04] transition-colors">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block mb-4">Pleural Effusion</span>
+                        <div className="flex items-end gap-2">
+                          <span className="text-3xl font-black text-white">{inferenceResult.clinicalAttributes.pleuralEffusion.toFixed(1)}</span>
+                          <span className="text-sm text-slate-500 font-mono mb-1">%</span>
+                        </div>
+                      </div>
+                      <div className={`border rounded-3xl p-5 transition-colors ${inferenceResult.clinicalAttributes.airBronchograms ? 'bg-rose-500/10 border-rose-500/30' : 'bg-white/[0.02] border-white/[0.05]'}`}>
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block mb-4">Air Bronchograms</span>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${inferenceResult.clinicalAttributes.airBronchograms ? 'bg-rose-400 text-rose-400' : 'bg-slate-700 text-slate-700'}`}></div>
+                          <span className="text-xl font-bold text-white">
+                            {inferenceResult.clinicalAttributes.airBronchograms ? 'DETECTED' : 'CLEAR'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
 
-              {/* Specific clinical attribute metrics */}
-              <div className="grid grid-cols-2 gap-3 mt-5 border-t border-slate-800 pt-5">
-                <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/60">
-                  <span className="text-[10px] text-slate-500 block font-mono">Consolidation index</span>
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-sm font-bold text-slate-250 font-mono">{inferenceResult.clinicalAttributes.consolidation.toFixed(1)}%</span>
-                    <span className="text-[8px] text-slate-500">Threshold: 45%</span>
-                  </div>
-                </div>
+                    {/* Uncertainty Warning */}
+                    {inferenceResult.probability >= 50 && inferenceResult.probability <= 65 && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 flex items-start gap-4">
+                        <AlertCircle className="w-6 h-6 text-amber-400 shrink-0 mt-1" />
+                        <div>
+                          <h4 className="text-sm font-bold text-amber-300 mb-1 tracking-tight">Uncertainty Calibration Warning</h4>
+                          <p className="text-sm text-amber-200/70 leading-relaxed">
+                            The model is expressing high uncertainty ({inferenceResult.probability.toFixed(1)}%). 
+                            Because this network is optimized for extreme recall (Sensitivity = 99%), it aggressively flags ambiguous textures to prevent false negatives. 
+                            <strong> Human radiological review is strictly required.</strong>
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
 
-                <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/60">
-                  <span className="text-[10px] text-slate-500 block font-mono">Patchy infiltrates score</span>
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-sm font-bold text-slate-250 font-mono">{inferenceResult.clinicalAttributes.infiltrates.toFixed(1)}%</span>
-                    <span className="text-[8px] text-slate-500">Threshold: 50%</span>
-                  </div>
-                </div>
+                {resultTab === 'performance' && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="grid grid-cols-1 md:grid-cols-2 gap-6"
+                  >
+                    <div className="space-y-4">
+                      <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 hover:bg-white/[0.04] transition-colors">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block mb-4 flex items-center gap-2">
+                          <TrendingUp className="w-3 h-3" />
+                          Model Pipeline
+                        </span>
+                        <ul className="space-y-3 font-mono text-sm">
+                          <li className="flex justify-between"><span className="text-slate-500">Backbone</span> <span className="text-cyan-300">ResNet-50</span></li>
+                          <li className="flex justify-between"><span className="text-slate-500">Epochs</span> <span className="text-slate-300">25 (Early Stop)</span></li>
+                          <li className="flex justify-between"><span className="text-slate-500">Test N</span> <span className="text-slate-300">624 Images</span></li>
+                          <li className="flex justify-between"><span className="text-slate-500">Latency</span> <span className="text-slate-300">{inferenceResult.latencyMs}ms</span></li>
+                        </ul>
+                      </div>
+                      
+                      <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6">
+                        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block mb-2">
+                          Methodological Care & Patient Leakage
+                        </span>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          A strict methodological approach was used. The dataset was split <strong className="text-white">by Patient ID</strong>, not randomly by image. This prevents data leakage and artificially inflated metrics.
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/60">
-                  <span className="text-[10px] text-slate-500 block font-mono">Pleural effusion risk</span>
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-sm font-bold text-slate-250 font-mono">{inferenceResult.clinicalAttributes.pleuralEffusion.toFixed(1)}%</span>
-                    <span className="text-[8px] text-slate-500">Threshold: 30%</span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-850/60">
-                  <span className="text-[10px] text-slate-500 block font-mono">Air bronchograms signal</span>
-                  <div className="flex items-baseline gap-2 mt-1.5">
-                    <span className={`text-xs font-bold font-mono ${inferenceResult.clinicalAttributes.airBronchograms ? 'text-amber-400' : 'text-slate-500'}`}>
-                      {inferenceResult.clinicalAttributes.airBronchograms ? 'DETECTED/PRESENT' : 'NOT DETECTED'}
-                    </span>
-                  </div>
-                </div>
+                    <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 flex flex-col justify-center text-center group hover:bg-white/[0.04] transition-all cursor-pointer">
+                      <BarChart2 className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform duration-500" />
+                      <h4 className="text-lg font-bold text-white mb-2 tracking-tight">Full Evaluation Report</h4>
+                      <p className="text-xs text-slate-400 mb-6 px-4">
+                        View the comprehensive Model Card detailing the ROC AUC, confusion matrix (387 TP / 3 FN), and ethical constraints.
+                      </p>
+                      <a href="https://github.com/AryaAjayan/MediScan/blob/master/MODEL_CARD.md" target="_blank" rel="noopener noreferrer" className="mx-auto flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-300 bg-indigo-500/10 px-6 py-3 rounded-full hover:bg-indigo-500/20 border border-indigo-500/30 transition-all">
+                        Open Model Card <ChevronRight className="w-4 h-4" />
+                      </a>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             </div>
-
-            {/* CNN Metadata specs */}
-            <div className="bg-slate-950 rounded-xl p-3 border border-slate-850 mt-5">
-              <span className="text-[9px] font-mono text-slate-500 block uppercase tracking-wider mb-1.5">
-                CONVOLUTION BACKBONE SPECIFICATIONS
-              </span>
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono leading-relaxed text-slate-400">
-                <div>Fine-Tune Epochs: <span className="text-slate-200">25 (Early Stop)</span></div>
-                <div>Device Target: <span className="text-cyan-400">cuda:0 GeForce</span></div>
-                <div>Active FC Channels: <span className="text-indigo-400">2048 to 2</span></div>
-                <div>Avg CrossEntropy Loss: <span className="text-slate-200">0.142</span></div>
-              </div>
-            </div>
-
-            {/* Active Preprocessing Augmentations */}
-            <div className="bg-slate-950 rounded-xl p-3 border border-slate-850 mt-3">
-              <span className="text-[9px] font-mono text-slate-500 block uppercase tracking-wider mb-1.5">
-                ACTIVE INPUT PREPROCESSING TRANSFORM SPECIFICATIONS
-              </span>
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono leading-relaxed text-slate-400">
-                <div>Resize Dim: <span className="text-slate-200">{prepConfig.resize}px</span></div>
-                <div>Random Rotation: <span className="text-slate-200">{prepConfig.rotation}°</span></div>
-                <div>Horizontal Flip: <span className="text-slate-200">{prepConfig.horizontalFlip ? 'Yes' : 'No'}</span></div>
-                <div>Gaussian Noise: <span className="text-slate-200">{(prepConfig.gaussianNoise * 100).toFixed(0)}%</span></div>
-              </div>
-            </div>
-
-            {/* Clinical Glossary Explainer */}
-            <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-850 mt-3">
-              <button
-                onClick={() => setShowGlossary(!showGlossary)}
-                className="flex items-center gap-1.5 text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-wider cursor-pointer"
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-                {showGlossary ? 'Hide Clinical Glossary' : 'Show Clinical Glossary'}
-              </button>
-              {showGlossary && (
-                <div className="mt-2 text-[10.5px] text-slate-500 space-y-1.5 border-t border-slate-900 pt-2 leading-relaxed">
-                  <div>
-                    <strong className="text-slate-400 font-mono">Consolidation:</strong> Alveoli spaces filled with fluid/pus instead of air (appears dense white).
-                  </div>
-                  <div>
-                    <strong className="text-slate-400 font-mono">Infiltrates:</strong> Ill-defined patchy opacities showing cellular substance/fluid accumulation.
-                  </div>
-                  <div>
-                    <strong className="text-slate-400 font-mono">Pleural Effusion:</strong> Excess fluid build-up in the pleural cavity surrounding the lungs.
-                  </div>
-                  <div>
-                    <strong className="text-slate-400 font-mono">Air Bronchograms:</strong> Dark air-filled bronchi outlines visible against dense consolidated lung fields.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Explainability Attributions Text */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
-            <div>
-              <span className="text-[11px] font-mono tracking-wider text-slate-500 uppercase block mb-3">
-                GRAD-CAM EXPLAINABILITY INTERPRETATION
-              </span>
-              <p className="text-xs text-slate-300 leading-relaxed font-sans font-medium mb-4">
-                {inferenceResult.explainability}
-              </p>
-
-              <div className="bg-slate-950 rounded-xl p-3.5 border border-slate-850">
-                <span className="text-[10px] font-mono text-cyan-400 font-bold block mb-1">
-                  How Grad-CAM is calculated for ResNet-50:
-                </span>
-                <p className="text-[10.5px] text-slate-500 leading-relaxed">
-                  We capture gradients from the final linear output class and map them backwards through the Global Average Pooling layer into the last convolutional residual bottleneck block <code className="text-[9.5px] bg-slate-900 px-1 py-0.5 rounded text-indigo-300">layer4[2].conv3</code> (2048 deep feature channels). By multiplying each 7x7 channel activation map by its averaged gradient weight, we get a spatial density grid indicating where the networks visual focus centered to derive its final determination score.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div>
-                <span className="text-[10px] font-mono text-slate-500 uppercase block mb-1">
-                  FASTAPI HOST CONNECTOR URL
-                </span>
-                <code className="text-[10px] font-mono block bg-slate-950 py-1.5 px-3 rounded-lg border border-slate-850 max-w-[220px] sm:max-w-[280px] truncate text-slate-400">
-                  {inferenceResult.dockerEndpointUsed}
-                </code>
-              </div>
-              <button
-                onClick={handleDownloadReport}
-                className="w-full sm:w-auto py-2 px-4 bg-slate-950 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-slate-200"
-              >
-                <Download className="w-3.5 h-3.5 text-cyan-400" />
-                Export Report
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Deep Learning Performance Metrics (ROC, Loss, Matrix) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-          <div>
-            <span className="text-xs font-semibold text-slate-250 block tracking-tight">
-              Pre-trained ResNet-50 validation performance curves
-            </span>
-            <span className="text-[10px] font-mono text-slate-500">
-              Fine-tuned on NIH ChestX-ray8 and CheXpert labels (pneumonia vs normal)
-            </span>
-          </div>
-
-          <div className="flex bg-slate-950 p-1 border border-slate-850 rounded-lg">
-            <button
-              onClick={() => setMetricTab('roc')}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded-md font-mono transition-all ${
-                metricTab === 'roc' ? 'bg-indigo-950/60 border border-indigo-900/30 text-indigo-300' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              ROC Curve
-            </button>
-            <button
-              onClick={() => setMetricTab('loss')}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded-md font-mono transition-all ${
-                metricTab === 'loss' ? 'bg-indigo-950/60 border border-indigo-900/30 text-indigo-300' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Loss/Accuracy
-            </button>
-            <button
-              onClick={() => setMetricTab('matrix')}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded-md font-mono transition-all ${
-                metricTab === 'matrix' ? 'bg-indigo-950/60 border border-indigo-900/30 text-indigo-300' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Confusion Matrix
-            </button>
-          </div>
-        </div>
-
-        {/* Dynamic Static Curve SVGs */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
-          
-          {/* Curve Display */}
-          <div className="lg:col-span-2 bg-slate-950 border border-slate-850/80 rounded-xl p-4 flex justify-center items-center aspect-[21/9] min-h-[180px]">
-            {metricTab === 'roc' && (
-              /* ROC Curve Graph */
-              <svg viewBox="0 0 400 180" className="w-full h-full text-slate-400 select-none">
-                <defs>
-                  <linearGradient id="rocGlow" x1="0%" y1="100%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#818cf8" stopOpacity="0.1" />
-                    <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.25" />
-                  </linearGradient>
-                </defs>
-                {/* Gridlines */}
-                <line x1="40" y1="140" x2="360" y2="140" stroke="#1e293b" strokeWidth="1" />
-                <line x1="40" y1="30" x2="40" y2="140" stroke="#1e293b" strokeWidth="1" />
-                
-                <line x1="40" y1="85" x2="360" y2="85" stroke="#0f172a" strokeWidth="0.8" strokeDasharray="2,2" />
-                <line x1="200" y1="30" x2="200" y2="140" stroke="#0f172a" strokeWidth="0.8" strokeDasharray="2,2" />
-
-                {/* Diagonal random guess baseline */}
-                <line x1="40" y1="140" x2="360" y2="30" stroke="#334155" strokeWidth="1.2" strokeDasharray="4,4" />
-
-                {/* Area under ROC curve */}
-                <path d="M 40,140 Q 60,35 360,30 L 360,140 Z" fill="url(#rocGlow)" />
-                {/* Real ResNet-50 ROC Curve */}
-                <path d="M 40,140 Q 60,35 360,30" fill="none" stroke="#06b6d4" strokeWidth="2.5" />
-
-                {/* Legend & Scores */}
-                <circle cx="65" cy="40" r="3" fill="#06b6d4" />
-                <text x="73" y="43" className="text-[10px] font-mono fill-cyan-450 font-bold">ResNet-50 Chest Net (AUC = 0.972)</text>
-
-                <text x="35" y="152" className="text-[8px] font-mono fill-slate-500">0.0 (FPR)</text>
-                <text x="180" y="152" className="text-[8px] font-mono fill-slate-500">0.5 (False Positive Rate)</text>
-                <text x="340" y="152" className="text-[8px] font-mono fill-slate-500">1.0 (FPR)</text>
-
-                <text x="12" y="35" className="text-[8px] font-mono fill-slate-500">1.0 (TPR)</text>
-                <text x="12" y="88" className="text-[8px] font-mono fill-slate-500">0.5</text>
-                <text x="12" y="142" className="text-[8px] font-mono fill-slate-500">0.0</text>
-              </svg>
-            )}
-
-            {metricTab === 'loss' && (
-              /* Training vs Validation Loss Curve Graph */
-              <svg viewBox="0 0 400 180" className="w-full h-full text-slate-400 select-none">
-                {/* Horizontal / Vertical Axes */}
-                <line x1="40" y1="140" x2="360" y2="140" stroke="#1e293b" strokeWidth="1" />
-                <line x1="40" y1="30" x2="40" y2="140" stroke="#1e293b" strokeWidth="1" />
-
-                {/* Training Loss Curve - descending fast */}
-                <path d="M 40,35 Q 70,120 180,128 T 360,135" fill="none" stroke="#4f46e5" strokeWidth="1.8" />
-                {/* Validation Loss Curve - descending then flattening */}
-                <path d="M 40,55 Q 80,118 180,125 T 360,123" fill="none" stroke="#06b6d4" strokeWidth="2" />
-
-                <text x="345" y="152" className="text-[8px] font-mono fill-slate-500">25 Epochs</text>
-                <text x="35" y="152" className="text-[8px] font-mono fill-slate-500">Epoch 1</text>
-                <text x="180" y="152" className="text-[8px] font-mono fill-slate-500">Epoch 12</text>
-
-                <text x="12" y="35" className="text-[8px] font-mono fill-slate-500">Loss: 1.2</text>
-                <text x="12" y="142" className="text-[8px] font-mono fill-slate-500">Loss: 0.1</text>
-
-                {/* Legend */}
-                <line x1="280" y1="40" x2="310" y2="40" stroke="#4f46e5" strokeWidth="2" />
-                <text x="315" y="43" className="text-[9px] font-mono fill-slate-400">Training Loss</text>
-
-                <line x1="280" y1="55" x2="310" y2="55" stroke="#06b6d4" strokeWidth="2" />
-                <text x="315" y="58" className="text-[9px] font-mono fill-slate-400">Val Loss (0.183)</text>
-              </svg>
-            )}
-
-            {metricTab === 'matrix' && (
-              /* Confusion Matrix */
-              <div className="w-full max-w-[320px] font-mono text-[11px] text-slate-300">
-                <div className="grid grid-cols-3 gap-1 divide-slate-800 text-center">
-                  <div />
-                  <div className="text-[10px] text-slate-500">Predicted Norm</div>
-                  <div className="text-[10px] text-slate-500">Predicted Pneu</div>
-
-                  <div className="text-slate-500 text-left flex items-center">Actual Norm</div>
-                  <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-                    <div className="text-xs font-bold text-emerald-400">96.3%</div>
-                    <div className="text-[9px] text-slate-550 mt-1">TN (True Norm)</div>
-                  </div>
-                  <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-                    <div className="text-xs font-bold text-rose-450">3.7%</div>
-                    <div className="text-[9px] text-slate-550 mt-1">FP (Type I Er)</div>
-                  </div>
-
-                  <div className="text-slate-500 text-left flex items-center">Actual Pneu</div>
-                  <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-                    <div className="text-xs font-bold text-rose-450">5.8%</div>
-                    <div className="text-[9px] text-slate-550 mt-1">FN (Type II Er)</div>
-                  </div>
-                  <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
-                    <div className="text-xs font-bold text-emerald-400">94.2%</div>
-                    <div className="text-[9px] text-slate-550 mt-1">TP (True Pneu)</div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Highlights */}
-          <div className="space-y-3.5">
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-xl bg-cyan-950/40 border border-cyan-800/40 shrink-0 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-200 block leading-tight">94.2% Classification Accuracy</span>
-                <span className="text-[10.5px] text-slate-450 leading-relaxed block mt-0.5">
-                  Extremely high precision. Outperforms standard pre-trained architectures by leveraging transfer learning weights and chest-specific training layers.
-                </span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-xl bg-cyan-950/40 border border-cyan-800/40 shrink-0 flex items-center justify-center">
-                <CheckCircle className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-200 block leading-tight">Minimized Type II Errors (False Negatives)</span>
-                <span className="text-[10.5px] text-slate-450 leading-relaxed block mt-0.5">
-                  Critical medical specification. Standard weights are biased towards high recall, decreasing the rate of missed pathogenic opacity markers to less than 5.8%.
-                </span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-xl bg-cyan-950/40 border border-cyan-800/40 shrink-0 flex items-center justify-center">
-                <BarChart2 className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-200 block leading-tight">AUC Index = 0.972 (Area Under ROC)</span>
-                <span className="text-[10.5px] text-slate-450 leading-relaxed block mt-0.5">
-                  Represents exceptional discriminating power between pneumonia alveolar opacities and standard clear thoracic expansions on pediatric and adult cases alike.
-                </span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
